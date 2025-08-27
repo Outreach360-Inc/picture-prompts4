@@ -1,0 +1,315 @@
+<!-- Mystery Picture: Viewport-Fit Version (Squarespace-ready, single block) -->
+<style>
+  .mystery-wrap {
+    --card: #ffffff;
+    --ink: #111827;
+    --ink-soft: #6b7280;
+    --accent: #2563eb;
+    --accent-ink: #ffffff;
+    --ring: rgba(37, 99, 235, 0.25);
+
+    /* Fill the device viewport; account for mobile browser UI with 100dvh */
+    min-height: 100dvh;
+    padding:
+      calc(env(safe-area-inset-top, 0px) + 10px)
+      calc(env(safe-area-inset-right, 0px) + 12px)
+      calc(env(safe-area-inset-bottom, 0px) + 12px)
+      calc(env(safe-area-inset-left, 0px) + 12px);
+    box-sizing: border-box;
+
+    display: grid;
+    place-items: center;
+    font-family: var(--sqs-site-font, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial);
+    color: var(--ink);
+    background: #0b0b0c;
+  }
+
+  .mystery-card {
+    background: var(--card);
+    border-radius: 18px;
+    box-shadow:
+      0 1px 2px rgba(0,0,0,.06),
+      0 12px 28px rgba(0,0,0,.08);
+    border: 1px solid #edf2f7;
+
+    /* Size within viewport */
+    width: min(94vw, 860px);
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px);
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+
+  .mystery-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .mystery-title {
+    font-weight: 750;
+    font-size: clamp(18px, 2.1vw, 22px);
+    letter-spacing: .2px;
+  }
+  .hint { font-size: 12px; color: var(--ink-soft); }
+
+  /* The frame will be dynamically given a fixed height so the whole card fits 100dvh */
+  .mystery-frame {
+    position: relative;
+    width: 100%;
+    /* aspect-ratio is a fallback; JS will set explicit height */
+    aspect-ratio: 4 / 3;
+    border-radius: 14px;
+    overflow: hidden;
+    background-color: #0f172a;
+    background-repeat: no-repeat;
+    background-size: 280%;
+    background-position: 50% 50%;
+    transition: background-position .3s ease, background-size .3s ease, filter .25s ease;
+    outline: 1px solid rgba(255,255,255,.06);
+    flex: 0 0 auto; /* don't stretch; JS controls height */
+  }
+
+  /* Full image overlay for Reveal */
+  .full-view {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .35s ease;
+  }
+  .full-view.show { opacity: 1; pointer-events: auto; }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    appearance: none;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    color: var(--ink);
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 650;
+    letter-spacing: .15px;
+    cursor: pointer;
+    transition: transform .06s ease, box-shadow .2s ease, border-color .2s ease, background .2s ease;
+  }
+  .btn:focus-visible { outline: none; box-shadow: 0 0 0 6px var(--ring); }
+  .btn:hover { transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+  .tiny-note {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--ink-soft);
+    align-self: center;
+  }
+
+  /* Small spin animation flair */
+  .spinning { animation: pulseShadow .9s ease-in-out infinite; }
+  @keyframes pulseShadow {
+    0%, 100% { box-shadow: inset 0 0 0 0 rgba(37, 99, 235, 0.0); }
+    50%      { box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.2); }
+  }
+
+  /* Tight viewports: scale typography & paddings down a bit */
+  @media (max-height: 640px) {
+    .mystery-card { padding: 16px; }
+    .mystery-header { margin-bottom: 10px; }
+    .btn { padding: 8px 12px; font-size: 13px; }
+    .tiny-note { display: none; }
+  }
+</style>
+
+<div class="mystery-wrap" id="mysteryApp">
+  <div class="mystery-card" id="mysteryCard">
+    <div class="mystery-header" id="mysteryHeader">
+      <div class="mystery-title">Mystery Picture</div>
+      <div class="hint">Spin for a random close-up. Reveal to see the whole picture.</div>
+    </div>
+
+    <div class="mystery-frame" id="mysteryFrame" role="img" aria-label="Mystery picture (cropped view)">
+      <img id="fullView" class="full-view" alt="Full image reveal" />
+    </div>
+
+    <div class="controls" id="mysteryControls">
+      <button id="spinBtn" class="btn primary" type="button" aria-label="Spin to randomize crop">🎰 Spin</button>
+      <button id="revealBtn" class="btn" type="button" aria-label="Reveal full image">👀 Reveal</button>
+      <button id="newCropBtn" class="btn" type="button" aria-label="New random crop">🔀 New Crop</button>
+      <span class="tiny-note">Tip: Space = Spin, Enter = Reveal</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // === Replace or extend this array with your own images later ===
+  const IMAGES = [
+    "https://github.com/Outreach360-Inc/picture-prompts3/blob/main/005a7fa3af3608776f09f9f5163dba99.jpg?raw=true"
+  ];
+
+  // Tunable ranges (in %): higher = more zoomed-in (harder)
+  const ZOOM_RANGE = { min: 220, max: 520 }; // try 150..300 for easier crops
+  // Prevent extreme edge crops; 0..100 is full spectrum
+  const POSITION_RANGE = { min: 8, max: 92 };
+
+  const el = {
+    wrap: document.getElementById("mysteryApp"),
+    card: document.getElementById("mysteryCard"),
+    header: document.getElementById("mysteryHeader"),
+    frame: document.getElementById("mysteryFrame"),
+    full: document.getElementById("fullView"),
+    controls: document.getElementById("mysteryControls"),
+    spin: document.getElementById("spinBtn"),
+    reveal: document.getElementById("revealBtn"),
+    newCrop: document.getElementById("newCropBtn"),
+  };
+
+  let currentUrl = IMAGES[0];
+  let revealed = false;
+  let spinning = false;
+
+  function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+  function setImage(url) {
+    currentUrl = url;
+    el.frame.style.backgroundImage = `url("${url}")`;
+    el.full.src = url;
+  }
+
+  function randomCropOnce() {
+    const zoom = randInt(ZOOM_RANGE.min, ZOOM_RANGE.max);
+    const x = randInt(POSITION_RANGE.min, POSITION_RANGE.max);
+    const y = randInt(POSITION_RANGE.min, POSITION_RANGE.max);
+    el.frame.style.backgroundSize = `${zoom}%`;
+    el.frame.style.backgroundPosition = `${x}% ${y}%`;
+  }
+
+  function ensureHiddenReveal() {
+    revealed = false;
+    el.full.classList.remove("show");
+    el.reveal.textContent = "👀 Reveal";
+    el.reveal.setAttribute("aria-label", "Reveal full image");
+  }
+
+  function toggleReveal() {
+    revealed = !revealed;
+    if (revealed) {
+      el.full.classList.add("show");
+      el.reveal.textContent = "🙈 Hide";
+      el.reveal.setAttribute("aria-label", "Hide full image");
+    } else {
+      el.full.classList.remove("show");
+      el.reveal.textContent = "👀 Reveal";
+      el.reveal.setAttribute("aria-label", "Reveal full image");
+    }
+  }
+
+  function disableControls(disabled) {
+    [el.spin, el.reveal, el.newCrop].forEach(b => b.disabled = disabled);
+  }
+
+  // Spinner effect: quickly shuffle multiple random crops, then settle
+  function spin() {
+    if (spinning) return;
+    spinning = true;
+    ensureHiddenReveal();
+
+    // If you later add more URLs, we can randomly pick one here:
+    // setImage(IMAGES[randInt(0, IMAGES.length - 1)]);
+
+    el.frame.classList.add("spinning");
+    disableControls(true);
+
+    const duration = 1200;  // ms total spin time
+    const interval = 85;    // ms between crop changes
+    const start = performance.now();
+
+    function tick(now) {
+      randomCropOnce();
+      if (now - start < duration) requestAnimationFrame(tick);
+      else {
+        randomCropOnce(); // settle
+        el.frame.classList.remove("spinning");
+        disableControls(false);
+        spinning = false;
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function newCrop() { ensureHiddenReveal(); randomCropOnce(); }
+
+  // --- Fit the whole card to the viewport (no scroll) ---
+  function viewportHeight() {
+    // visualViewport excludes browser chrome when available
+    return (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+  }
+
+  function fitToViewport() {
+    // Available vertical space for the frame inside the card
+    const vh = viewportHeight();
+
+    // Read dynamic heights
+    const headerH = el.header.offsetHeight;
+    const controlsH = el.controls.offsetHeight;
+
+    // Match CSS paddings/margins used above
+    const CARD_PADDING_Y = 40;            // .mystery-card padding 20px top + bottom
+    const HEADER_MARGIN_BOTTOM = 14;
+    const CONTROLS_MARGIN_TOP = 14;
+    const WRAP_PADDING_BUFFER = 22;       // wrap padding & small safety buffer
+
+    let available = vh
+      - (CARD_PADDING_Y + HEADER_MARGIN_BOTTOM + CONTROLS_MARGIN_TOP
+      + headerH + controlsH + WRAP_PADDING_BUFFER);
+
+    // Guard rails
+    const MIN = 140;  // never collapse smaller than this
+    const MAX = 800;  // avoid absurd heights on huge screens
+    available = Math.max(MIN, Math.min(MAX, Math.floor(available)));
+
+    el.frame.style.height = available + "px";
+  }
+
+  // Keyboard shortcuts: Space = Spin, Enter = Reveal
+  function onKey(e) {
+    const isTyping = ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName);
+    if (isTyping) return;
+    if (e.code === "Space") { e.preventDefault(); spin(); }
+    else if (e.code === "Enter") { e.preventDefault(); toggleReveal(); }
+  }
+
+  // Wire up controls
+  el.spin.addEventListener("click", spin);
+  el.reveal.addEventListener("click", toggleReveal);
+  el.newCrop.addEventListener("click", newCrop);
+  window.addEventListener("keydown", onKey);
+
+  // Recompute on resize, zoom, orientation changes, address bar show/hide
+  window.addEventListener("resize", fitToViewport);
+  window.addEventListener("orientationchange", fitToViewport);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", fitToViewport);
+    window.visualViewport.addEventListener("scroll", fitToViewport);
+  }
+
+  // Init
+  setImage(currentUrl);
+  randomCropOnce();
+  fitToViewport(); // ensure everything fits without scrolling
+})();
+</script>

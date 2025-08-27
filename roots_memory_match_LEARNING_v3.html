@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Roots Memory Match — Learn Mode v3</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #0f172a;
+    --muted: #475569;
+    --accent: #2563eb;
+    --card: #f8fafc;
+    --border: #e5e7eb;
+  }
+  html, body { margin:0; padding:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; }
+  .wrap { max-width: 1000px; margin: 24px auto; padding: 16px; }
+  h1 { margin:0 0 6px 0; font-size: clamp(1.25rem, 3.2vw, 2rem); }
+  p.sub { margin:0 0 16px 0; color:var(--muted); }
+  .panel { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:12px; }
+  .controls { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:10px; }
+  .control { background:#fff; border:1px solid var(--border); border-radius:12px; padding:10px; }
+  label { font-weight:700; font-size:.95rem; display:block; margin-bottom:6px; }
+  select, input[type=number] { width:100%; padding:8px; border:1px solid var(--border); border-radius:10px; }
+  .tog { display:flex; align-items:center; gap:8px; }
+  .tog input { width:18px; height:18px; }
+  button { border:none; background:var(--accent); color:#fff; padding:10px 14px; border-radius:12px; font-weight:700; cursor:pointer; }
+  button.secondary { background:#fff; color:var(--accent); border:1px solid var(--accent); }
+  .hud { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:10px 0; }
+  .pill { background:#dbeafe; color:#1d4ed8; padding:4px 10px; border-radius:999px; font-weight:700; font-size:.9rem; }
+  .grid { display:grid; gap:10px; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); margin-top:12px; }
+  .card { position:relative; user-select:none; background:#fff; border:1px solid var(--border); border-radius:14px; aspect-ratio: 4 / 3; display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; }
+  .card .inner { padding:10px; text-align:center; font-weight:800; color:var(--fg); font-size: clamp(.9rem, 2.1vw, 1.2rem); }
+  .subline { display:block; margin-top:6px; font-weight:600; font-size:.9em; color:var(--muted); }
+  .card.revealed { box-shadow: 0 0 0 2px #bfdbfe inset; }
+  .card.solved { background:#f0fdf4; border-color:#bbf7d0; color:#14532d; }
+  .footer { margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; }
+  .small { font-size:.9rem; color:var(--muted); }
+  #study { display:none; }
+  .study-list { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px; margin-top:10px; }
+  .study-card { background:#fff; border:1px solid var(--border); border-radius:12px; padding:10px; }
+  .study-root { font-weight:900; font-size:1.05rem; }
+  .study-meaning { color:var(--muted); }
+  .study-ex { margin-top:6px; font-size:.95rem; }
+  .banner { position: sticky; bottom: 8px; background:#ecfeff; border:1px solid #a5f3fc; border-radius:12px; padding:10px; margin-top:10px; display:none; }
+  .banner b { color:#0e7490; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Roots Memory Match — Learn Mode v3</h1>
+    <p class="sub">Study briefly then play to reinforce. All commas are removed. Each pair uses a unique meaning and the two cards show different example words.</p>
+
+    <section class="panel" id="setup">
+      <div class="controls">
+        <div class="control">
+          <label for="pairs">Number of pairs</label>
+          <input id="pairs" type="number" min="6" max="36" value="16" />
+          <div class="small">Grid size adjusts automatically.</div>
+        </div>
+        <div class="control">
+          <label>Include</label>
+          <div class="tog"><input id="incBase" type="checkbox" checked /><span>Bases</span></div>
+          <div class="tog"><input id="incPrefix" type="checkbox" /><span>Prefixes</span></div>
+          <div class="tog"><input id="incSuffix" type="checkbox" /><span>Suffixes</span></div>
+        </div>
+        <div class="control">
+          <label for="difficulty">Difficulty</label>
+          <select id="difficulty">
+            <option value="normal" selected>Normal</option>
+            <option value="hard">Hard</option>
+          </select>
+        </div>
+        <div class="control">
+          <div class="tog"><input id="studyFirst" type="checkbox" checked /><span>Study first</span></div>
+          <div class="tog"><input id="showBanner" type="checkbox" checked /><span>Show learning banner after matches</span></div>
+        </div>
+      </div>
+      <div class="footer">
+        <button id="startBtn">Start</button>
+        <button id="printBtn" class="secondary">Print</button>
+        <span id="poolInfo" class="pill"></span>
+      </div>
+    </section>
+
+    <section class="panel" id="study">
+      <h3>Quick Study</h3>
+      <p class="small">Preview the selected roots and meanings. When ready press Begin.</p>
+      <div id="studyList" class="study-list"></div>
+      <div class="footer">
+        <button id="beginBtn">Begin Game</button>
+      </div>
+    </section>
+
+    <section class="panel hidden" id="game">
+      <div class="hud">
+        <span class="pill" id="status">0 matches</span>
+        <span class="pill" id="moves">0 moves</span>
+        <span class="pill" id="timer">00:00</span>
+      </div>
+      <div id="grid" class="grid"></div>
+      <div id="learnBanner" class="banner"></div>
+      <div class="footer">
+        <button id="restartBtn" class="secondary">Restart</button>
+      </div>
+    </section>
+    <p class="small">Note Prefix cards show a trailing dash like <em>pre-</em> and suffix cards show a leading dash like <em>-ology</em>.</p>
+  </div>
+
+<script>
+(function(){
+  const RAW = [];
+
+  function noCommas(s) {
+    return (s || "").toString().replace(/,/g, "");
+  }
+
+  function uniqueMeaningSet(includeBase, includePrefix, includeSuffix) {
+    const pool = [];
+    for (const e of RAW) {
+      if (e.kind === "base" && includeBase) pool.push(e);
+      if (e.kind === "prefix" && includePrefix) pool.push(e);
+      if (e.kind === "suffix" && includeSuffix) pool.push(e);
+    }
+    const seen = new Set();
+    const out = [];
+    for (const e of pool) {
+      const key = (e.meaning || "").toLowerCase().trim();
+      if (!key) continue;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(e);
+      }
+    }
+    return out;
+  }
+
+  function shuffle(a) { return a.map(x => [Math.random(), x]).sort((a,b)=>a[0]-b[0]).map(p=>p[1]); }
+  function zero(n) { return (n<10?"0":"") + n; }
+
+  const el = id => document.getElementById(id);
+  const pairsInput = el("pairs");
+  const incBase = el("incBase");
+  const incPrefix = el("incPrefix");
+  const incSuffix = el("incSuffix");
+  const startBtn = el("startBtn");
+  const beginBtn = el("beginBtn");
+  const printBtn = el("printBtn");
+  const poolInfo = el("poolInfo");
+  const game = el("game");
+  const study = el("study");
+  const setup = el("setup");
+  const grid = el("grid");
+  const statusPill = el("status");
+  const movesPill = el("moves");
+  const timerPill = el("timer");
+  const restartBtn = el("restartBtn");
+  const difficulty = el("difficulty");
+  const studyFirst = el("studyFirst");
+  const showBanner = el("showBanner");
+  const studyList = el("studyList");
+  const learnBanner = el("learnBanner");
+
+  let selectedPairs = [];
+  let cards = [];
+  let first = null, second = null;
+  let solvedPairs = 0;
+  let moves = 0;
+  let tStart = 0, tHandle = null;
+  let lock = false;
+
+  function updatePoolInfo() {
+    const set = uniqueMeaningSet(incBase.checked, incPrefix.checked, incSuffix.checked);
+    poolInfo.textContent = `${set.length} unique meanings available`;
+  }
+
+  incBase.addEventListener("change", updatePoolInfo);
+  incPrefix.addEventListener("change", updatePoolInfo);
+  incSuffix.addEventListener("change", updatePoolInfo);
+  pairsInput.addEventListener("input", updatePoolInfo);
+  updatePoolInfo();
+
+  printBtn.addEventListener("click", ()=> window.print());
+
+  startBtn.addEventListener("click", () => {
+    try {
+      const baseSet = uniqueMeaningSet(incBase.checked, incPrefix.checked, incSuffix.checked);
+      let n = Math.max(6, Math.min(36, parseInt(pairsInput.value)||16));
+      if (baseSet.length === 0) {
+        alert("No roots detected. Try enabling Bases or use a smaller number of pairs.");
+        return;
+      }
+      if (baseSet.length < n) n = baseSet.length;
+      selectedPairs = shuffle(baseSet).slice(0, n);
+      if (studyFirst.checked) {
+        renderStudy(selectedPairs);
+        setup.classList.add("hidden");
+        study.classList.remove("hidden");
+      } else {
+        beginGame();
+      }
+    } catch (err) {
+      alert("There was a scripting error starting the game.");
+      console.error(err);
+    }
+  });
+
+  restartBtn.addEventListener("click", () => {
+    stopTimer();
+    setup.classList.remove("hidden");
+    game.classList.add("hidden");
+    study.classList.add("hidden");
+    updatePoolInfo();
+  });
+
+  beginBtn.addEventListener("click", () => {
+    beginGame();
+  });
+
+  function renderStudy(pairs) {
+    studyList.innerHTML = "";
+    for (const p of pairs) {
+      const label = p.kind === "prefix" ? (p.root.endsWith("-") ? p.root : p.root + "-") :
+                    p.kind === "suffix" ? (p.root.startsWith("-") ? p.root : "-" + p.root) :
+                    p.root;
+      const ex = Array.isArray(p.examples) ? p.examples.slice(0, 4) : [];
+      const exText = ex.length ? "Examples " + noCommas(ex.join(" ")) : "";
+      const sc = document.createElement("div");
+      sc.className = "study-card";
+      sc.innerHTML = `<div class="study-root">${noCommas(label)}</div>
+                      <div class="study-meaning">${noCommas(p.meaning)}</div>
+                      <div class="study-ex">${exText}</div>`;
+      studyList.appendChild(sc);
+    }
+  }
+
+  function beginGame() {
+    setup.classList.add("hidden");
+    study.classList.add("hidden");
+    game.classList.remove("hidden");
+    startTimer();
+    buildBoard(selectedPairs);
+  }
+
+  function startTimer() {
+    tStart = Date.now();
+    if (tHandle) clearInterval(tHandle);
+    tHandle = setInterval(() => {
+      const s = Math.floor((Date.now() - tStart)/1000);
+      const mm = Math.floor(s/60), ss = s % 60;
+      timerPill.textContent = `${zero(mm)}:${zero(ss)}`;
+    }, 500);
+  }
+  function stopTimer() { if (tHandle) clearInterval(tHandle); tHandle = null; }
+
+  function pickTwoExamples(examples) {
+    const ex = Array.isArray(examples) ? examples.filter(Boolean) : [];
+    if (ex.length >= 2) {
+      const shuffled = shuffle(ex.slice());
+      return [shuffled[0], shuffled[1]];
+    }
+    if (ex.length === 1) return [ex[0], ""];
+    return ["", ""];
+  }
+
+  function buildBoard(pairs) {
+    const data = [];
+    for (const p of pairs) {
+      const label = p.kind === "prefix" ? (p.root.endsWith("-") ? p.root : p.root + "-") :
+                    p.kind === "suffix" ? (p.root.startsWith("-") ? p.root : "-" + p.root) :
+                    p.root;
+      const [exA, exB] = pickTwoExamples(p.examples);
+      let defText = p.meaning;
+      if (difficulty.value === "hard") {
+        defText = p.meaning.replace(/\(.*?\)/g, "").trim();
+      }
+      data.push({ id: p.kind + "|" + p.root + "|" + p.meaning, type: "root", text: label, sub: exA ? "ex " + exA : "", meta: p });
+      data.push({ id: p.kind + "|" + p.root + "|" + p.meaning, type: "meaning", text: defText, sub: exB ? "ex " + exB : "", meta: p });
+    }
+    cards = shuffle(data);
+    grid.innerHTML = "";
+    moves = 0; solvedPairs = 0; updateHud(); hideBanner();
+    for (const c of cards) {
+      const div = document.createElement("div");
+      div.className = "card";
+      div.dataset.id = c.id;
+      div.dataset.type = c.type;
+      const sub = c.sub ? `<span class="subline">${noCommas(c.sub)}</span>` : "";
+      div.innerHTML = `<div class="inner">${noCommas(c.text)}${sub}</div>`;
+      div.addEventListener("click", () => onFlip(div));
+      grid.appendChild(div);
+    }
+  }
+
+  function updateHud() {
+    statusPill.textContent = `${solvedPairs} matches`;
+    movesPill.textContent = `${moves} moves`;
+  }
+
+  function showBannerFor(p) {
+    if (!showBanner.checked) return;
+    const label = p.kind === "prefix" ? (p.root.endsWith("-") ? p.root : p.root + "-") :
+                  p.kind === "suffix" ? (p.root.startsWith("-") ? p.root : "-" + p.root) :
+                  p.root;
+    const ex = Array.isArray(p.examples) ? p.examples.slice(0, 2) : [];
+    const exText = ex.length ? "Examples " + noCommas(ex.join(" ")) : "";
+    learnBanner.innerHTML = `<b>${noCommas(label)}</b> means <b>${noCommas(p.meaning)}</b>. ${exText}`;
+    learnBanner.style.display = "block";
+  }
+  function hideBanner() { learnBanner.style.display = "none"; }
+
+  function onFlip(node) {
+    if (lock) return;
+    if (node.classList.contains("revealed") || node.classList.contains("solved")) return;
+    node.classList.add("revealed");
+    if (!first) { first = node; return; }
+    second = node;
+    moves++; updateHud();
+    const match = (first.dataset.id === second.dataset.id) && (first.dataset.type !== second.dataset.type);
+    if (match) {
+      first.classList.add("solved"); second.classList.add("solved");
+      const meta = cards.find(c => c.id === first.dataset.id)?.meta || null;
+      first = null; second = null;
+      solvedPairs++;
+      updateHud();
+      if (meta) showBannerFor(meta);
+      if (solvedPairs*2 === cards.length) {
+        stopTimer();
+        statusPill.textContent = `Completed in ${moves} moves`;
+      }
+    } else {
+      lock = true;
+      setTimeout(() => {
+        if (first) first.classList.remove("revealed");
+        if (second) second.classList.remove("revealed");
+        first = null; second = null;
+        lock = false;
+      }, 650);
+    }
+  }
+})();</script>
+</body>
+</html>
